@@ -3,6 +3,7 @@ from . import kothiwal_kollasch as K
 import pandas as pd
 import os
 from glob import glob
+import shutil
 from ipyfilechooser import FileChooser
 from ipywidgets import Dropdown, Label, Image, HBox, VBox, Text, Output
 from IPython.display import display, HTML
@@ -139,8 +140,8 @@ class HitExpansionKothiwalKollasch(HitExpanssionBase):
 class HitExpansionUI():
     def __init__(
         self, 
-        input_root = '/alphafold/combio/NGS', 
-        output_root = os.path.expanduser("~/ngs_hit_expansion"), 
+        input_root = os.path.expanduser("~"), 
+        output_root = os.path.expanduser("~"), 
     ):
         self.input_root = input_root
         self.output_root = output_root
@@ -208,14 +209,15 @@ class HitExpansionUI():
         self.input_df = pd.read_csv(self.INPUT_FILE)
         count_cols = self.input_df.columns[self.input_df.columns.str.startswith("count ")].tolist()
         prefix = os.path.commonprefix(count_cols)
-        self.ngs_rounds = {c[len(prefix):]: c for c in count_cols}
+        self.ngs_rounds = {"": ""} | {c[len(prefix):]: c for c in count_cols}
         self.ddEarlierRound.options = list(self.ngs_rounds.keys())
-        self.ddEarlierRound.value = None
+        self.ddEarlierRound.value = ""
         self.ddLaterRound.options = list(self.ngs_rounds.keys())
-        self.ddLaterRound.value = None
+        self.ddLaterRound.value = ""
         self.ddValidationRound.options = list(self.ngs_rounds.keys())
-        self.ddValidationRound.value = None
-        self.OUTPUT_FOLDER = os.path.join(self.output_root, os.path.splitext(self.INPUT_FILE)[0] + "_hit_expansion")
+        self.ddValidationRound.value = ""
+        
+        self.OUTPUT_FOLDER = os.path.join(self.output_root, os.path.splitext(self.INPUT_FILE)[0].lstrip("/") + "_hit_expansion")
         # self.txtOutputPath.value = self.OUTPUT_FOLDER
 
 
@@ -233,6 +235,10 @@ class HitExpansionUI():
         ], layout={'width': 'max-content'}))
 
     def run(self):
+        if os.path.isdir(self.OUTPUT_FOLDER):
+            shutil.rmtree(self.OUTPUT_FOLDER)
+            os.mkdir(self.OUTPUT_FOLDER)
+
         print("Output location:", self.OUTPUT_FOLDER)
         if (self.features == "CDRH3 kmers") or (self.features == "CDRH3 kmers + BLOSUM62"):
             he = HitExpansionNguyen(
@@ -244,7 +250,7 @@ class HitExpansionUI():
                 val_facs_col = self.val_facs_col, 
                 use_blosum_in_model = self.features == "CDRH3 kmers + BLOSUM62"
             )
-        elif self.features == "CDRH3 kmers + VL":
+        elif self.features == "CDRH3 kmers + VH + VL":
             he = HitExpansionKothiwalKollasch(
                 input_file = self.INPUT_FILE, 
                 input_df = self.input_df, 
