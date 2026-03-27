@@ -1,14 +1,12 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pickle
 import os
 from Levenshtein import distance
 import sklearn.linear_model as lm
 from sklearn.metrics import roc_curve, auc
 import scipy.stats as stats
-import sklearn
+
 
 
 cdr3_alphabet = 'ACDEFGHIKLMNPQRSTVWY'
@@ -117,7 +115,7 @@ def cdr3_seqs_to_arr(seqs, include_framework=''):
     return kmer_arr
 
 def train_model(output_dir, df, macs_col, facs_train_col, facs_val_col=""):
-    params_file = os.path.join(output_dir, "kmer_LR_model_params.pkl")
+    os.makedirs(output_dir, exist_ok=True)
 
     to_remove = (
         df['cdr3_aa'].str.contains(rf"[^{cdr3_alphabet}]") | 
@@ -136,20 +134,21 @@ def train_model(output_dir, df, macs_col, facs_train_col, facs_val_col=""):
     # vh_onehot = pd.get_dummies(pd.Categorical(df['heavy'], categories=IPI_VH_SEQS_V2, ordered=True))
     # vl_onehot = pd.get_dummies(pd.Categorical(df['light'], categories=IPI_VL_SEQS, ordered=True))
     # length_onehot = pd.get_dummies(pd.Categorical(df['CDR3'].str.len(), ordered=True))
+    vh_onehot = pd.get_dummies(df['vh_scaffold'])
     vl_onehot = pd.get_dummies(df['vl_scaffold'])
     length_onehot = pd.get_dummies(df['cdr3_aa'].str.len())
-    # print(vh_onehot.columns.values)
+    print("VH scaffolds:", vh_onehot.columns.values.tolist())
     print("VL scaffolds:", vl_onehot.columns.values.tolist())
     kmer_vh_vl_arr = np.concatenate([
         kmer_arr, 
-    #     vh_onehot.values,
+        vh_onehot.values,
         vl_onehot.values
     ], axis=1)
     kmer_vh_vl_len_arr = np.concatenate([kmer_vh_vl_arr, length_onehot.values], axis=1)
     kmer_arr_labels = kmer_list
     kmer_vh_vl_arr_labels = (
         kmer_arr_labels +
-    #     vh_onehot.columns.tolist() +
+        vh_onehot.columns.tolist() +
         vl_onehot.columns.tolist()
     )
     kmer_vh_vl_len_arr_labels = kmer_vh_vl_arr_labels + length_onehot.columns.tolist()
@@ -167,13 +166,7 @@ def train_model(output_dir, df, macs_col, facs_train_col, facs_val_col=""):
 
     # train model
     thresh = 0.
-    if os.path.exists(params_file) and False:
-        with open(params_file, "rb") as f:
-            clf = pickle.load(f)
-    else:
-        clf = lm.LogisticRegression(random_state=42, penalty='l1', C=1., class_weight='balanced', solver='liblinear').fit(X_train, y_train > thresh)
-        with open(params_file, "wb") as f:
-            pickle.dump(clf, f)
+    clf = lm.LogisticRegression(random_state=42, penalty='l1', C=1., class_weight='balanced', solver='liblinear').fit(X_train, y_train > thresh)
 
     y_score_train = clf.predict_proba(X_train)[:, 1]
     fpr_train, tpr_train, _ = roc_curve(y_train > 0, y_score_train)
